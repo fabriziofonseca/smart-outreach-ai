@@ -1,0 +1,12 @@
+# Ignore environment variables
+.venv
+.env
+# Ignore Streamlit secrets if stored locally
+.streamlit/secrets.toml
+# Bytecode & cache
+__pycache__/
+*.py[cod]
+*.pkl
+# VSCode & OS junk
+.vscode/
+.DS_Store

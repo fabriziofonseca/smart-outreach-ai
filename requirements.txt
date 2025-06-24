@@ -1,0 +1,13 @@
+openai
+requests
+beautifulsoup4
+playwright
+pandas
+streamlit
+python-dotenv
+tqdm
+jinja2
+notion-client
+googlemaps
+email-validator
+
