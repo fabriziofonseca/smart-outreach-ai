@@ -1,9 +1,12 @@
 import os
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
 
 load_dotenv()
-openai.api_key = os.getenv("DEEPSEEK_API_KEY")
+client = OpenAI(
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    base_url="https://api.deepseek.com"
+)
 
 def generate_pitch(lead):
     name = lead["name"]
@@ -13,32 +16,44 @@ def generate_pitch(lead):
     site_text = lead.get("site_text", "")
 
     prompt = f"""
-You're a cold email expert. Write a short personalized cold email to the owner of a medspa based on the following business info.
+You’re a cold-email expert. Return exactly two parts in plain text:
 
-Business Name: {name}
-City: {city}
-Review Count: {reviews}
-Google Maps: {maps_url}
+1) A subject line on the first line, exactly:
+Subject: Let’s bring more clients to {name}
 
-Website Content:
-\"\"\"
-{site_text.strip()}
-\"\"\"
+2) A blank line, then the email body (4–6 sentences).
 
-Your task:
-- Write in a friendly, casual tone
-- Reference something from their website content or services if possible
-- Mention that you help medspas with lead generation + automations
-- End with a soft call to action for a quick chat
+Tone & Structure:
+- Professional and concise.
+- Begin “Hi there,” and note their review count (e.g., “I saw you have 82 Google reviews—great work!”).
+- State you help medspas with lead generation and automations.
+- Highlight concrete benefits: more consistent bookings, less manual follow-up.
+- End with a clear, polite CTA:  
+  Would you be open to a brief call to discuss?  
+- Sign off exactly:  
+  Best,  
+  Fabrizio Fonseca
 
-Limit to 3–5 sentences.
+Business Details:  
+Name: {name}  
+City: {city}  
+Reviews: {reviews}  
+Google Maps URL: {maps_url}
+
+Website Content:  
+\"\"\"{site_text.strip()}\"\"\"
 """
-
-    response = openai.ChatCompletion.create(
+    
+    response = client.chat.completions.create(
         model="deepseek-chat",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
         max_tokens=300
     )
 
-    return response["choices"][0]["message"]["content"].strip()
+    output = response.choices[0].message.content.strip()
+    lines = output.split("\n", 1)
+    subject = lines[0].replace("Subject:", "").strip()
+    body = lines[1].strip() if len(lines) > 1 else ""
+
+    return subject.strip(), body.strip()
