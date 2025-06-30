@@ -28,9 +28,10 @@ Subject: Let’s bring more clients to {name}
 
 Tone & Structure:
 - Professional and concise.
-- Begin with “Hi there,” and mention their review count (e.g., “I saw you have 82 Google reviews—great work!”).
+- Begin with “Hi there,” and mention their review count.
 - State that you help medspas with lead generation and automations.
 - Highlight concrete benefits: more consistent bookings, less manual follow-up.
+- Avoid using very technical marketing words like "leads" or other highly technical concepts.
 - End with a dual CTA:
   Would you be open to a quick 15-minute call to explore how we can bring in more high-quality leads?  
   You can either reply with a simple “Yes,” and I’ll follow up,  
