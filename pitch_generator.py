@@ -1,4 +1,7 @@
+# pitch_generator.py
+
 import os
+import re
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -8,7 +11,7 @@ client = OpenAI(
     base_url="https://api.deepseek.com"
 )
 
-def generate_pitch(lead):
+def generate_pitch(lead, calendly_url):
     name = lead["name"]
     city = lead["city"]
     reviews = lead["review_count"]
@@ -25,12 +28,15 @@ Subject: Let’s bring more clients to {name}
 
 Tone & Structure:
 - Professional and concise.
-- Begin “Hi there,” and note their review count (e.g., “I saw you have 82 Google reviews—great work!”).
-- State you help medspas with lead generation and automations.
+- Begin with “Hi there,” and mention their review count (e.g., “I saw you have 82 Google reviews—great work!”).
+- State that you help medspas with lead generation and automations.
 - Highlight concrete benefits: more consistent bookings, less manual follow-up.
-- End with a clear, polite CTA:  
-  Would you be open to a brief call to discuss?  
-- Sign off exactly:  
+- End with a dual CTA:
+  Would you be open to a quick 15-minute call to explore how we can bring in more high-quality leads?  
+  You can either reply with a simple “Yes,” and I’ll follow up,  
+  or book a time directly here: {calendly_url}
+
+- Sign off exactly:
   Best,  
   Fabrizio Fonseca
 
@@ -43,7 +49,7 @@ Google Maps URL: {maps_url}
 Website Content:  
 \"\"\"{site_text.strip()}\"\"\"
 """
-    
+
     response = client.chat.completions.create(
         model="deepseek-chat",
         messages=[{"role": "user", "content": prompt}],
@@ -52,8 +58,10 @@ Website Content:
     )
 
     output = response.choices[0].message.content.strip()
-    lines = output.split("\n", 1)
-    subject = lines[0].replace("Subject:", "").strip()
-    body = lines[1].strip() if len(lines) > 1 else ""
 
-    return subject.strip(), body.strip()
+    # Split subject and body
+    subject_line, body = output.split("\n\n", 1)
+    subject = re.sub(r'^[^A-Za-z0-9]+', '', subject_line.replace("Subject:", "")).strip()
+    body_text = body.strip()
+
+    return subject, body_text

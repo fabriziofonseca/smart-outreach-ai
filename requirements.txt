@@ -10,4 +10,6 @@ jinja2
 notion-client
 googlemaps
 email-validator
-
+geopy
+streamlit-folium
+folium

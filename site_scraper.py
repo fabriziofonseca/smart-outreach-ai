@@ -28,7 +28,6 @@ def scrape_site_with_links(base_url, max_pages=5, max_chars=5000):
     visited = set()
     collected_text = ""
 
-    # Step 1: Scrape homepage
     homepage_text = scrape_page_text(base_url)
     collected_text += homepage_text + "\n\n"
     visited.add(base_url)
