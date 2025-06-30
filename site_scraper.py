@@ -58,8 +58,10 @@ def scrape_site_with_links(base_url, max_pages=5, max_chars=5000):
 
 
 def extract_emails_from_text(text: str) -> set[str]:
-    pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
-    return set(re.findall(pattern, text))
+    # word-boundaries ensure we don’t grab trailing punctuation
+    pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"
+    # re.IGNORECASE lets you match uppercase/lowercase seamlessly
+    return set(re.findall(pattern, text, flags=re.IGNORECASE))
 
 
 def extract_emails_from_soup(soup) -> set[str]:
@@ -72,7 +74,7 @@ def extract_emails_from_soup(soup) -> set[str]:
     return mails
 
 
-def scrape_emails(base_url, max_pages=5) -> list[str]:
+def scrape_emails(base_url, max_pages=10) -> list[str]:
     visited = set()
     emails  = set()
     queue   = [base_url]

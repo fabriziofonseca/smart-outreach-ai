@@ -9,133 +9,152 @@ import folium
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 
-# Setup
-st.set_page_config(page_title="Smart Outreach AI", layout="centered")
+# Initialize session state storages
+if 'export_df' not in st.session_state:
+    st.session_state.export_df = None
+if 'send_leads' not in st.session_state:
+    st.session_state.send_leads = []
 
-# Sidebar settings
+# Page config and sidebar
+st.set_page_config(page_title="Smart Outreach AI", layout="centered")
 st.sidebar.title("🛠️ Settings")
 calendly_url  = st.sidebar.text_input("Your Calendly link", value=st.session_state.get("calendly_url", ""))
-sender_email = st.sidebar.text_input("Your Gmail address", value=st.session_state.get("sender_email", ""))
+sender_email = st.sidebar.text_input("Your Gmail address",    value=st.session_state.get("sender_email", ""))
 app_password = st.sidebar.text_input("Your Gmail App Password", type="password", value=st.session_state.get("app_password", ""))
+lead_limit   = st.sidebar.slider("Max # of leads", 0, 50, 10, help="How many leads to fetch/scrape at once")
 
 if calendly_url:  st.session_state.calendly_url   = calendly_url
 if sender_email: st.session_state.sender_email  = sender_email
 if app_password: st.session_state.app_password  = app_password
 
-# Map UI
-with st.expander("📍 Click on the map to choose a target location", expanded=True):
-    default_location = [39.8283, -98.5795]
-    map_object = folium.Map(location=default_location, zoom_start=4, control_scale=True)
-    map_data   = st_folium(map_object, height=500, width=800, returned_objects=["center"])
-
+# Map selector
+with st.expander("📍 Choose target location", expanded=True):
+    map_obj  = folium.Map(location=[39.8283, -98.5795], zoom_start=4, control_scale=True)
+    map_data = st_folium(map_obj, height=500, width=800, returned_objects=["center"])
     if st.button("✅ Use This Location"):
         center = map_data.get("center")
         if center:
             st.session_state.map_center = center
-            st.success(f"Selected location: {center['lat']:.4f}, {center['lng']:.4f}")
+            st.success(f"Selected: {center['lat']:.4f}, {center['lng']:.4f}")
         else:
-            st.warning("Please wait for the map to load before selecting a location.")
+            st.warning("Wait for the map to load before selecting.")
 
-# Reverse geocode
+# Reverse geocode to city
 geolocator = Nominatim(user_agent="smart-outreach-ai")
-city       = ""
 coords     = st.session_state.get("map_center")
+city       = ""
 if coords:
     try:
-        loc = geolocator.reverse((coords['lat'], coords['lng']), timeout=10)
+        loc  = geolocator.reverse((coords['lat'], coords['lng']), timeout=10)
         addr = loc.raw.get("address", {})
         city = addr.get("city") or addr.get("town") or addr.get("village") or ""
         if city:
-            st.success(f"Selected location: {city} ({coords['lat']:.4f}, {coords['lng']:.4f})")
+            st.success(f"City: {city} ({coords['lat']:.4f}, {coords['lng']:.4f})")
         else:
-            st.warning("Coordinates selected, but no city name found.")
+            st.warning("No city found at these coordinates.")
     except Exception as e:
-        st.error("⚠️ Failed to detect city from coordinates. Try again.")
-        st.text(f"Error: {e}")
+        st.error("Failed to reverse geocode.")
+        st.text(str(e))
 else:
-    st.info("Click on the map to choose a target location.")
+    st.info("Select a city via the map above.")
 
 # Niche input
 niche = st.text_input("Niche")
 
-# Export Leads
-if st.button("📤 Fetch & Export Leads"):
+# Fetch & store leads for CSV export
+if st.button("📤 Fetch Leads for Export"):
     if not city:
-        st.warning("Select a city on the map first.")
+        st.warning("Pick a city first.")
     else:
-        raw_leads = get_leads(niche, [city], min_reviews=3, debug=False)
-        export_data = []
-
-        for lead in raw_leads:
+        raw = get_leads(niche, [city], min_reviews=3, debug=False)[:lead_limit]
+        rows = []
+        for lead in raw:
             email = lead.get("email", "") or ""
-            # fallback: scrape site for email
             if not email and lead.get("website"):
                 found = scrape_emails(lead["website"], max_pages=5)
                 email = found[0] if found else ""
-
-            export_data.append({
+            rows.append({
                 "Business Name": lead.get("name", ""),
-                "Phone"       : lead.get("phone", ""),
-                "Email"       : email,
-                "Website"     : lead.get("website", ""),
-                "Location"    : lead.get("address", "")
+                "Phone":          lead.get("phone", ""),
+                "Email":          email,
+                "Website":        lead.get("website", ""),
+                "Location":       lead.get("address", "")
             })
+        df = pd.DataFrame(rows)
+        st.session_state.export_df = df
+        st.success(f"Fetched {len(df)} leads.")
 
-        df  = pd.DataFrame(export_data)
-        csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button("Download Leads CSV", csv, "leads.csv", "text/csv")
+# Always show Download button if data exists
+if st.session_state.export_df is not None:
+    csv_bytes = st.session_state.export_df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="Download Leads CSV",
+        data=csv_bytes,
+        file_name="leads.csv",
+        mime="text/csv",
+        key="download_leads"
+    )
 
-# Generate Email
-if st.button("Generate Email"):
-    if not calendly_url:
-        st.warning("Please enter your Calendly link.")
-    elif not city:
-        st.warning("Select a city from the map first.")
+# Load leads into session for emailing
+if st.button("📧 Load Leads for Emailing"):
+    if not calendly_url or not city or not app_password:
+        st.warning("Please make sure that Canledly Link, City and Gmail Password are completed")
     else:
-        leads = get_leads(niche, [city], min_reviews=3, debug=False)
-        for lead in leads:
-            if not lead.get("website"):
-                st.error(f"No website for {lead['name']}. Skipping.")
-                continue
+        leads = get_leads(niche, [city], min_reviews=3, debug=False)[:lead_limit]
+        # attach sent flag
+        for ld in leads:
+            ld.setdefault("sent", False)
+        st.session_state.send_leads = leads
+        st.success(f"Loaded {len(leads)} leads for emailing.")
 
-            st.subheader(lead['name'])
-            st.write(f"📍 {lead['address']}  \n📞 {lead['phone']}  \n⭐ {lead['review_count']} reviews")
+# Iterate over stored leads for send/pitch UI
+for idx, lead in enumerate(st.session_state.send_leads):
+    st.divider()
+    st.subheader(lead.get("name", ""))
+    st.write(f"📍 {lead.get('address','')}  \n📞 {lead.get('phone','')}  \n⭐ {lead.get('review_count',0)} reviews")
 
-            # get site text for pitch
-            site_text = scrape_site_with_links(lead['website'], max_pages=5, max_chars=3000)
-            lead['site_text'] = site_text
+    # Extract or scrape email if not already present
+    email = lead.get("email", "") or ""
+    if not email and lead.get("website"):
+        found = scrape_emails(lead["website"], max_pages=5)
+        email = found[0] if found else ""
+    st.write(f"✉️ Found email: **{email or 'none'}**")
 
-            # extract email from site
-            found = scrape_emails(lead['website'], max_pages=5)
-            lead_email = found[0] if found else ""
-            st.write(f"✉️  Found email: **{lead_email or 'none'}**")
-            st.session_state.lead_email = lead_email
+    # Generate pitch once
+    if not lead.get("pitched", False):
+        subject, body = generate_pitch(lead, calendly_url)
+        lead["_subject"] = subject
+        lead["_body"]    = body
+        lead["pitched"]  = True
+    else:
+        subject = lead.get("_subject", "")
+        body    = lead.get("_body", "")
 
-            # generate pitch
-            subject, body = generate_pitch(lead, calendly_url)
-            st.session_state.email_subject = subject
-            st.session_state.email_body    = body
-            st.session_state.email_ready   = True
-            st.session_state.lead_name     = lead['name']
+    st.code(f"Subject: {subject}")
+    st.text_area("Email Body", value=body, height=200, key=f"body_{idx}")
 
-            st.code(f"Subject: {subject}", language="text")
-            st.text_area("Email Body", value=body, height=200)
-            break
-
-# Send Email
-if st.session_state.get('email_ready', False):
-    if st.button("Send Email to Lead", key=f"send_{st.session_state.lead_name}"):
-        to_addr = st.session_state.lead_email
-        if not to_addr:
-            st.warning("No recipient email found. Cannot send.")
-        elif not sender_email or not app_password:
-            st.warning("Your Gmail + App Password are required.")
+    if email:
+        if not lead.get("sent"):
+            if st.button("Send Email", key=f"send_{idx}"):
+                send_email(
+                    to_email=email,
+                    subject=subject,
+                    body=body,
+                    from_email=sender_email,
+                    email_password=app_password
+                )
+                lead["sent"] = True
+                st.success(f"Sent to {email}!")
         else:
-            send_email(
-                to_email=      to_addr,
-                subject=       st.session_state.email_subject,
-                body=          st.session_state.email_body,
-                from_email=    sender_email,
-                email_password=app_password
-            )
-            st.success(f"✅ Email sent to {to_addr}!")
+            st.info(f"✅ Email already sent to {email}.")
+    else:
+        st.warning("No email to send to for this lead.")
+
+
+# After all leads UI
+if st.session_state.send_leads:
+    st.success(f"🚀 Lead generation complete! {len(st.session_state.send_leads)} leads loaded.")
+
+# Email generation complete message
+if st.session_state.send_leads and all(lead.get('pitched', False) for lead in st.session_state.send_leads):
+    st.success("✉️ All email pitches generated and ready for review!")
