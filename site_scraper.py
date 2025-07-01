@@ -1,107 +1,83 @@
 # site_scraper.py
 import re
+import time
 import requests
-from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
+from bs4 import BeautifulSoup
 
 
-def is_internal_link(href, base_url):
-    if not href:
-        return False
-    parsed      = urlparse(href)
-    base_domain = urlparse(base_url).netloc
-    return (not parsed.netloc or parsed.netloc == base_domain) and not href.startswith("mailto:")
-
-
-def scrape_page_content(url):
+def fetch_html(url: str) -> str:
+    """
+    Fetch HTML using requests with broad headers.
+    """
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    }
     try:
-        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=8)
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 406:
+            # retry with broader Accept
+            headers['Accept'] = '*/*'
+            res = requests.get(url, headers=headers, timeout=10)
         res.raise_for_status()
-        soup = BeautifulSoup(res.text, 'html.parser')
-        text = '\n'.join([line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()])
-        return soup, text
-    except Exception:
-        return None, ""
-
-
-def scrape_page_text(url):
-    # legacy; uses only text
-    _, text = scrape_page_content(url)
-    return text
-
-
-def scrape_site_with_links(base_url, max_pages=5, max_chars=5000):
-    visited = set()
-    collected = ""
-
-    soup, text = scrape_page_content(base_url)
-    if text:
-        collected += text + "\n\n"
-    visited.add(base_url)
-
-    try:
-        internal = []
-        if soup:
-            for a in soup.find_all('a', href=True):
-                link = urljoin(base_url, a['href'])
-                if is_internal_link(link, base_url):
-                    internal.append(link)
-        for link in internal:
-            if link not in visited and len(visited) < max_pages:
-                _, t = scrape_page_content(link)
-                collected += t + "\n\n"
-                visited.add(link)
+        return res.text
     except Exception as e:
-        collected += f"[Error crawling links: {e}]"
-
-    return collected[:max_chars]
+        print(f"[fetch_html] error {getattr(e, 'response', '')} {e} at {url}")
+        return ""
 
 
 def extract_emails_from_text(text: str) -> set[str]:
-    # word-boundaries ensure we don’t grab trailing punctuation
+    # deobfuscate common patterns
+    deobs = text.replace('[at]','@').replace('(at)','@').replace(' at ','@')
+    deobs = deobs.replace('[dot]','.').replace('(dot)','.')
+    combined = text + '\n' + deobs
     pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"
-    # re.IGNORECASE lets you match uppercase/lowercase seamlessly
-    return set(re.findall(pattern, text, flags=re.IGNORECASE))
+    return set(re.findall(pattern, combined, flags=re.IGNORECASE))
 
 
 def extract_emails_from_soup(soup) -> set[str]:
     mails = set()
     for a in soup.find_all('a', href=True):
-        href = a['href']
-        if href.lower().startswith('mailto:'):
-            addr = href.split(':',1)[1].split('?')[0]
+        if a['href'].lower().startswith('mailto:'):
+            addr = a['href'].split(':',1)[1].split('?')[0]
             mails.add(addr)
     return mails
 
 
-def scrape_emails(base_url, max_pages=10) -> list[str]:
-    visited = set()
-    emails  = set()
-    queue   = [base_url]
+def is_internal_link(href: str, base: str) -> bool:
+    if not href:
+        return False
+    p = urlparse(href)
+    return (not p.netloc or p.netloc == urlparse(base).netloc) and not href.lower().startswith('mailto:')
 
-    while queue and len(visited) < max_pages:
-        url = queue.pop(0)
-        if url in visited:
+
+def scrape_emails(base_url: str, max_pages: int = 10) -> list[str]:
+    visited = {base_url}
+    emails = set()
+    html = fetch_html(base_url)
+    soup = BeautifulSoup(html, 'html.parser')
+    text = soup.get_text(separator='\n', strip=True)
+    emails |= extract_emails_from_text(text)
+    emails |= extract_emails_from_soup(soup)
+
+    # priorize contact/about links
+    links = [urljoin(base_url, a['href']) for a in soup.find_all('a', href=True) if is_internal_link(a['href'], base_url)]
+    contact_links = [l for l in links if 'contact' in l.lower() or 'about' in l.lower()]
+    other_links = [l for l in links if l not in contact_links]
+    crawl_list = contact_links + other_links
+
+    for link in crawl_list:
+        if len(visited) >= max_pages:
+            break
+        if link in visited:
             continue
-        visited.add(url)
-        try:
-            res = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}, timeout=8)
-            res.raise_for_status()
-            soup = BeautifulSoup(res.text, 'html.parser')
-
-            # text-based emails
-            text = '\n'.join([line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()])
-            emails.update(extract_emails_from_text(text))
-
-            # mailto: links
-            emails.update(extract_emails_from_soup(soup))
-
-            # enqueue internal links
-            for a in soup.find_all('a', href=True):
-                link = urljoin(base_url, a['href'])
-                if is_internal_link(link, base_url) and link not in visited:
-                    queue.append(link)
-        except Exception:
-            pass
+        visited.add(link)
+        html = fetch_html(link)
+        soup = BeautifulSoup(html, 'html.parser')
+        text = soup.get_text(separator='\n', strip=True)
+        emails |= extract_emails_from_text(text)
+        emails |= extract_emails_from_soup(soup)
+        time.sleep(0.5)
 
     return list(emails)
