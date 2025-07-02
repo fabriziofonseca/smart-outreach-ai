@@ -11,7 +11,7 @@ client = OpenAI(
     base_url="https://api.deepseek.com"
 )
 
-def generate_pitch(lead, calendly_url):
+def generate_pitch(lead):
     name = lead["name"]
     city = lead["city"]
     maps_url = lead["maps_url"]
@@ -39,7 +39,6 @@ Don't use markdown under any context, use simple plain text.
 - End with a dual CTA:
   Would you be open to a quick 15-minute call to explore how we can bring in more high-quality leads?  
   You can either reply with a simple “Yes,” and I’ll follow up,  
-  or book a time directly here: {calendly_url}
 
 - Sign off exactly:
   Best,  

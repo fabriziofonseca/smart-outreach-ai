@@ -15,14 +15,15 @@ st.title("Smart Outreach AI")
 
 # --- Sidebar Settings ---
 st.sidebar.header("Settings")
-calendly_url = st.sidebar.text_input("Your Calendly link", value=st.session_state.get("calendly_url", ""))
+#calendly_url = st.sidebar.text_input("Your Calendly link", value=st.session_state.get("calendly_url", ""))
 sender_email = st.sidebar.text_input("Your Gmail address", value=st.session_state.get("sender_email", ""))
 app_password = st.sidebar.text_input("Your Gmail App Password", type="password", value=st.session_state.get("app_password", ""))
 max_pages = st.sidebar.slider("Max API pages", 1, 5, st.session_state.get("max_pages", 3))
 lead_limit = st.sidebar.slider("Max # of leads to process", 0, 100, st.session_state.get("lead_limit", 50))
 
 # Persist sidebar inputs
-for key, val in {"calendly_url": calendly_url, "sender_email": sender_email, "app_password": app_password,
+# for key, val in {"calendly_url": calendly_url, "sender_email": sender_email, "app_password": app_password,
+for key, val in { "sender_email": sender_email, "app_password": app_password,
                  "max_pages": max_pages, "lead_limit": lead_limit}.items():
     if val is not None:
         st.session_state[key] = val
@@ -105,8 +106,9 @@ if st.session_state.export_df is not None:
                        mime="text/csv")
 
 # --- Generate & Send Emails (locked until creds are entered) ---
-if not calendly_url or not sender_email or not app_password:
-    st.warning("🔒 Enter your Calendly link, Gmail address, and App Password above to enable email generation.")
+#if not calendly_url or not sender_email or not app_password:
+if not sender_email or not app_password:
+    st.warning("🔒 Enter your Gmail address and App Password above to enable email generation.")
 else:
     # --- Load Leads for Emailing ---
     st.subheader("Generate & Send Emails")
@@ -131,7 +133,8 @@ else:
 
         # Only generate for leads that haven’t been pitched yet
         if not lead['pitched']:
-            subj, body = generate_pitch(lead, calendly_url)
+            #subj, body = generate_pitch(lead, calendly_url)
+            subj, body = generate_pitch(lead)
             lead['_subj'], lead['_body'], lead['pitched'] = subj, body, True
 
         st.write(f"### {lead.get('name')}")
