@@ -14,7 +14,6 @@ client = OpenAI(
 def generate_pitch(lead, calendly_url):
     name = lead["name"]
     city = lead["city"]
-    reviews = lead["review_count"]
     maps_url = lead["maps_url"]
     site_text = lead.get("site_text", "")
 
@@ -26,12 +25,17 @@ Subject: Let’s bring more clients to {name}
 
 2) A blank line, then the email body (4–6 sentences).
 
-Tone & Structure:
-- Professional and concise.
-- Begin with “Hi there,” and mention their review count.
-- State that you help medspas with lead generation and automations.
-- Highlight concrete benefits: more consistent bookings, less manual follow-up.
-- Avoid using very technical marketing words like "leads" or other highly technical concepts.
+
++ Tone & Structure:
+Don't use markdown under any context, use simple plain text. 
++ - Warmly professional — speak to them like a peer, not a robot.
++ - Open with “Hi there,” then immediately reference a specific detail about their business (e.g., recent review, unique service, or something on their homepage).
++ - Clearly state you partner with car detailing businesses to boost appointment volume and automate follow-up.
+
++ - Use vivid, benefit-driven language (“fill every seat,” “never miss a client,” “watch your revenue rise”) without jargon.
+
+
+
 - End with a dual CTA:
   Would you be open to a quick 15-minute call to explore how we can bring in more high-quality leads?  
   You can either reply with a simple “Yes,” and I’ll follow up,  
@@ -44,7 +48,6 @@ Tone & Structure:
 Business Details:  
 Name: {name}  
 City: {city}  
-Reviews: {reviews}  
 Google Maps URL: {maps_url}
 
 Website Content:  

@@ -77,7 +77,7 @@ if st.button("Fetch & Export Leads"):
             st.error(f"API Error: {e}")
             leads = []
         leads = leads[:st.session_state.lead_limit]
-        st.write(f"🔍 Raw leads fetched: {len(leads)}")
+       # st.write(f"🔍 Raw leads fetched: {len(leads)}")
         rows = []
         for lead in leads:
             email = lead.get('email') or ''
@@ -85,11 +85,13 @@ if st.button("Fetch & Export Leads"):
                 found = scrape_emails(lead['website'], max_pages=5)
                 email = found[0] if found else ''
             rows.append({
-                'Name': lead.get('name',''),
-                'Phone': lead.get('phone',''),
-                'Email': email,
-                'Website': lead.get('website',''),
-                'Address': lead.get('address','')
+                'name': lead.get('name',''),
+                'phone': lead.get('phone',''),
+                'email': email,
+                'website': lead.get('website',''),
+                'address': lead.get('address',''),
+                'city':city,
+                'maps_url': f"https://www.google.com/maps/place/?q=place_id:{lead.get('place_id','')}"
             })
         df = pd.DataFrame(rows)
         st.session_state.export_df = df
@@ -102,34 +104,51 @@ if st.session_state.export_df is not None:
                        file_name="leads.csv",
                        mime="text/csv")
 
-# --- Load Leads for Emailing ---
-st.subheader("Generate & Send Emails")
-if st.button("Load Leads for Emailing"):
-    if st.session_state.export_df is None:
-        st.warning("Fetch leads first above.")
-    else:
-        st.session_state.send_leads = st.session_state.export_df.to_dict('records')
-        for lead in st.session_state.send_leads:
-            lead['sent'] = False
-            lead['pitched'] = False
-        st.success(f"🔄 Loaded {len(st.session_state.send_leads)} leads for emailing.")
+# --- Generate & Send Emails (locked until creds are entered) ---
+if not calendly_url or not sender_email or not app_password:
+    st.warning("🔒 Enter your Calendly link, Gmail address, and App Password above to enable email generation.")
+else:
+    # --- Load Leads for Emailing ---
+    st.subheader("Generate & Send Emails")
+    if st.button("Load Leads for Emailing"):
+        if st.session_state.export_df is None:
+            st.warning("Fetch leads first above.")
+        else:
+            st.session_state.send_leads = st.session_state.export_df.to_dict('records')
+            for lead in st.session_state.send_leads:
+                lead['sent'] = False
+                lead['pitched'] = False
+            st.success(f"🔄 Loaded {len(st.session_state.send_leads)} leads for emailing.")
 
-# --- Email Pitch & Send Loop ---
-for idx, lead in enumerate(st.session_state.send_leads):
-    st.divider()
-    email = lead.get('Email','')
-    if not email:
-        st.warning(f"Skipping {lead.get('Name')} — no email.")
-        continue
-    if not lead['pitched']:
-        subj, body = generate_pitch(lead, calendly_url)
-        lead['_subj'], lead['_body'], lead['pitched'] = subj, body, True
-    st.write(f"### {lead.get('Name')}")
-    st.write(f"✉️ {email}")
-    st.code(f"Subject: {lead['_subj']}")
-    st.text_area("Body", value=lead['_body'], height=200, key=f"body_{idx}")
-    if not lead['sent'] and st.button("Send Email", key=f"send_{idx}"):
-        send_email(to_email=email, subject=lead['_subj'], body=lead['_body'],
-                   from_email=sender_email, email_password=app_password)
-        lead['sent'] = True
-        st.success(f"✅ Email sent to {email}")
+    # --- Email Pitch & Send Loop ---
+    for idx, lead in enumerate(st.session_state.send_leads):
+        st.divider()
+        email = lead.get('email','')
+
+        if not email:
+            st.warning(f"Skipping this lead - No email address")
+            continue
+
+        # Only generate for leads that haven’t been pitched yet
+        if not lead['pitched']:
+            subj, body = generate_pitch(lead, calendly_url)
+            lead['_subj'], lead['_body'], lead['pitched'] = subj, body, True
+
+        st.write(f"### {lead.get('name')}")
+        st.write(f"✉️ {email}")
+        st.code(f"Subject: {lead['_subj']}")
+        st.text_area("Body", value=lead['_body'], height=200, key=f"body_{idx}")
+
+        if not lead['sent']:
+            if not email:
+                st.warning(f"Cannot send email because there's no email address")
+            elif st.button("Send Emai", key=f"send_{idx}"):
+                send_email(
+                    to_email=email,
+                    subject=lead['_subj'],
+                    body=lead['_body'],
+                    from_email=sender_email,
+                    email_password=app_password
+                )
+                lead['sent'] = True
+                st.success(f"✅ Email sent to {email}")

@@ -30,7 +30,7 @@ def _nearby_search(lat: float, lng: float, keyword: str, pagetoken: str | None =
     params = {
         "key":     GOOGLE_API_KEY,
         "location": f"{lat},{lng}",
-        "radius":   50000,        # 50 km — you can adjust if you like
+        "radius":   20000,        # 50 km — you can adjust if you like
         "keyword":  keyword,
     }
     if pagetoken:
@@ -54,7 +54,7 @@ def _place_details(place_id: str) -> dict:
 def get_leads(
     niche: str,
     locations: list[str],
-    max_pages: int = 3,
+    max_pages: int = 5,
     debug: bool = False
 ) -> list[dict]:
     """
