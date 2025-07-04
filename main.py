@@ -17,7 +17,7 @@ st.title("Smart Outreach AI")
 st.sidebar.header("Settings")
 #calendly_url = st.sidebar.text_input("Your Calendly link", value=st.session_state.get("calendly_url", ""))
 sender_email = st.sidebar.text_input("Your Gmail address", value=st.session_state.get("sender_email", ""))
-app_password = st.sidebar.text_input("Your Gmail App Password", type="password", value=st.session_state.get("app_password", ""))
+app_password = st.sidebar.text_input("Your App Password", type="password", value=st.session_state.get("app_password", ""))
 max_pages = st.sidebar.slider("Max API pages", 1, 5, st.session_state.get("max_pages", 3))
 lead_limit = st.sidebar.slider("Max # of leads to process", 0, 100, st.session_state.get("lead_limit", 50))
 
